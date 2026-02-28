@@ -1,6 +1,6 @@
 // ============================================================
 // DIY Fingerprint-Based Unlocker
-// Milestone 2: Boot + Switch + Sensor + Finger Detection
+// Milestone 3: Boot + Switch + Sensor + Registration Flow
 // ============================================================
 
 #include <DFRobot_ID809.h>
@@ -8,13 +8,15 @@
 #include "config.h"
 #include "switch_control.h"
 #include "led_feedback.h"
+#include "eeprom_storage.h"
+#include "registration.h"
 
 // ─── Globals ───
 DFRobot_ID809 fingerprint;
 bool sensorOK = false;
 DeviceMode currentMode = MODE_RECOGNIZE;
 
-// Finger detection state — avoid spamming serial
+// Finger detection state (RECOGNIZE mode only in M3)
 bool fingerPresent = false;
 bool fingerPrevious = false;
 
@@ -22,7 +24,8 @@ bool fingerPrevious = false;
 void bootSequence();
 bool initSensor();
 void handleModeSwitch();
-void pollFinger();
+void handleRegisterMode();
+void handleRecognizeMode();
 
 // ============================================================
 // SETUP
@@ -38,9 +41,13 @@ void loop() {
   // 1. Check for mode switch change
   handleModeSwitch();
 
-  // 2. Poll finger detection (mode-aware)
+  // 2. Mode-specific behavior
   if (sensorOK) {
-    pollFinger();
+    if (currentMode == MODE_REGISTER) {
+      handleRegisterMode();
+    } else {
+      handleRecognizeMode();
+    }
   }
 
   delay(50);
@@ -74,55 +81,90 @@ void handleModeSwitch() {
 }
 
 // ============================================================
-// FINGER DETECTION (edge-triggered serial, mode-aware LED)
+// REGISTER MODE — wait for finger touch to start registration
 // ============================================================
-void pollFinger() {
+void handleRegisterMode() {
   fingerPresent = (fingerprint.detectFinger() == 1);
 
-  // Only print on transitions (edge-triggered, not level)
   if (fingerPresent && !fingerPrevious) {
-    // Finger just placed
-    Serial.println("[SENSOR] Finger detected");
+    Serial.println("[SENSOR] Finger detected — starting registration");
 
-    if (currentMode == MODE_REGISTER) {
-      // In register mode: green flash acknowledges touch
-      // (full enrollment flow comes in M3)
-      ledCaptureOK();
-      Serial.println("[SENSOR] (REGISTER mode — enrollment not yet implemented)");
+    // Run the full registration flow (blocks until complete or failed)
+    bool success = runRegistration(fingerprint);
+
+    if (success) {
+      Serial.println("[REG] Success — flip switch to RECOGNIZE to use");
     } else {
-      // In recognize mode: attempt capture + search
-      // (full recognition flow comes in M4)
-      ledMatchFound();
-
-      uint8_t ret = fingerprint.collectionFingerprint(MATCH_TIMEOUT);
-      if (ret != ERR_ID809) {
-        uint8_t matchID = fingerprint.search();
-        if (matchID != 0 && matchID != ERR_ID809) {
-          Serial.print("[SENSOR] Match! ID #");
-          Serial.println(matchID);
-          ledMatchFound();
-        } else {
-          Serial.println("[SENSOR] No match");
-          ledNoMatch();
+      Serial.println("[REG] Registration did not complete");
+      // Check if switch changed during registration
+      switchRead();
+      if (switchChanged()) {
+        switchAckChange();
+        currentMode = switchRead();
+        Serial.print("[SWITCH] ");
+        Serial.println(modeName(currentMode));
+        if (currentMode == MODE_RECOGNIZE) {
+          ledRecognizeReady();
         }
+        fingerPrevious = false;
+        fingerPresent = false;
+        return;
+      }
+    }
+
+    // Restore register idle LED
+    ledRegisterIdle();
+
+    // Wait for finger removal before allowing another attempt
+    while (fingerprint.detectFinger()) delay(100);
+    fingerPresent = false;
+    fingerPrevious = false;
+    return;
+  }
+
+  fingerPrevious = fingerPresent;
+}
+
+// ============================================================
+// RECOGNIZE MODE — detect + match (placeholder HID in M4)
+// ============================================================
+void handleRecognizeMode() {
+  fingerPresent = (fingerprint.detectFinger() == 1);
+
+  if (fingerPresent && !fingerPrevious) {
+    Serial.println("[SENSOR] Finger detected");
+    ledMatchFound();
+
+    uint8_t ret = fingerprint.collectionFingerprint(MATCH_TIMEOUT);
+    if (ret != ERR_ID809) {
+      uint8_t matchID = fingerprint.search();
+      if (matchID != 0 && matchID != ERR_ID809) {
+        Serial.print("[AUTH] Match! ID #");
+        Serial.println(matchID);
+
+        // Read password to confirm EEPROM is paired
+        if (eepromHasRegistration()) {
+          Serial.println("[AUTH] Registration valid — HID unlock (M4)");
+        } else {
+          Serial.println("[AUTH] No password in EEPROM — flip to REGISTER");
+        }
+
+        ledMatchFound();
       } else {
-        Serial.println("[SENSOR] Capture failed");
+        Serial.println("[AUTH] No match");
         ledNoMatch();
       }
-
-      delay(1500);  // brief pause to show result LED
-
-      // Restore mode LED
-      ledRecognizeReady();
+    } else {
+      Serial.println("[AUTH] Capture failed");
+      ledNoMatch();
     }
-  } else if (!fingerPresent && fingerPrevious) {
-    // Finger just lifted
-    Serial.println("[SENSOR] Finger removed");
 
-    // Restore mode LED after register touch
-    if (currentMode == MODE_REGISTER) {
-      ledRegisterIdle();
-    }
+    delay(1500);
+    ledRecognizeReady();
+
+    // Wait for finger removal
+    while (fingerprint.detectFinger()) delay(100);
+    fingerPresent = false;
   }
 
   fingerPrevious = fingerPresent;
@@ -157,11 +199,20 @@ void bootSequence() {
     // Init LED wrappers
     ledInit(&fingerprint);
 
+    // 4. EEPROM init
+    eepromInit();
+    if (eepromHasRegistration()) {
+      Serial.print("[BOOT] EEPROM: valid registration (slot ");
+      Serial.print(eepromGetActiveSlot());
+      Serial.println(")");
+    } else {
+      Serial.println("[BOOT] EEPROM: no registration (virgin)");
+    }
+
     // Boot OK flash, then set mode LED
     ledBootOK();
     Serial.println("[BOOT] LED: breathing blue (boot OK)");
-
-    delay(2000);  // show boot LED for 2s
+    delay(2000);
 
     // Set LED to current mode
     if (currentMode == MODE_REGISTER) {
@@ -194,18 +245,13 @@ bool initSensor() {
   if (!ok) {
     Serial.println("FAILED");
     Serial.println("[ERROR] Sensor init failed — halting");
-
-    // Can't use ledInit() since sensor failed, so drive LED directly
     fingerprint.ctrlLED(fingerprint.eKeepsOn, fingerprint.eLEDRed, 0);
-
-    // Halt — no point continuing without sensor
     while (true) { delay(1000); }
     return false;
   }
 
   Serial.println("OK");
 
-  // Print sensor info
   Serial.print("[BOOT] Enrolled fingerprints: ");
   Serial.println(fingerprint.getEnrollCount());
 
