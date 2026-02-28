@@ -1,9 +1,10 @@
 // ============================================================
 // DIY Fingerprint-Based Unlocker
-// Milestone 6: IRQ detection + AES-256-CBC encrypted EEPROM
+// Milestone 7: Serial commands + encrypted EEPROM + IRQ
 // ============================================================
 
 #include <DFRobot_ID809.h>
+#include <hardware/watchdog.h>
 
 #include "config.h"
 #include "switch_control.h"
@@ -22,9 +23,13 @@ bool sensorOK = false;
 DeviceMode currentMode = MODE_RECOGNIZE;
 BootState bootState = BOOT_VIRGIN;
 
+// ─── Serial command buffer ───
+static String _serialCmdBuf = "";
+
 // ─── Forward declarations ───
 void bootSequence();
 bool initSensor();
+void handleSerialCommands();
 void handleModeSwitch();
 void handleRegisterMode();
 void handleRecognizeMode();
@@ -40,10 +45,13 @@ void setup() {
 // LOOP
 // ============================================================
 void loop() {
-  // 1. Check for mode switch change
+  // 1. Check for serial commands (e.g. !RESET from Web Serial UI)
+  handleSerialCommands();
+
+  // 2. Check for mode switch change
   handleModeSwitch();
 
-  // 2. Mode-specific behavior
+  // 3. Mode-specific behavior
   if (sensorOK) {
     if (currentMode == MODE_REGISTER) {
       handleRegisterMode();
@@ -53,6 +61,31 @@ void loop() {
   }
 
   delay(100);  // IRQ-driven — no need for fast polling
+}
+
+// ============================================================
+// SERIAL COMMAND HANDLER
+// ============================================================
+void handleSerialCommands() {
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      _serialCmdBuf.trim();
+      if (_serialCmdBuf == "!RESET") {
+        Serial.println("[CMD] Rebooting...");
+        Serial.flush();
+        delay(100);  // let the response reach the host
+        watchdog_reboot(0, 0, 0);  // immediate hardware reset
+        while (true) { tight_loop_contents(); }  // wait for watchdog
+      }
+      // Future commands can be added here with else-if
+      _serialCmdBuf = "";
+    } else {
+      if (_serialCmdBuf.length() < 32) {  // prevent runaway buffer
+        _serialCmdBuf += c;
+      }
+    }
+  }
 }
 
 // ============================================================
