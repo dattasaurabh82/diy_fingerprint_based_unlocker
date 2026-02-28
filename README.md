@@ -21,7 +21,6 @@
   <a href="#getting-started">Getting Started</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="#security">Security</a> &bull;
-  <a href="#credits">Credits</a>
 </p>
 
 ---
