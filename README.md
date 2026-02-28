@@ -166,7 +166,9 @@ diy_fingerprint_based_unlocker/
 ├── hid_unlock.h                         # Mac-specific HID keystroke sequence
 ├── validation.h                         # Boot integrity check + orphan cleanup
 ├── web/
-│   └── index.html                       # Web Serial Monitor (xterm.js + Web Serial API)
+│   ├── index.html                       # Web Serial Monitor — HTML shell
+│   ├── style.css                        # Nord dark theme + layout styles
+│   └── app.js                           # Web Serial API + xterm.js logic
 ├── .github/workflows/
 │   └── deploy-pages.yml                 # GitHub Actions → GitHub Pages deployment
 ├── PLAN.md                              # Full architecture document
