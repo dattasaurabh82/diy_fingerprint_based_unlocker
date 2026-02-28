@@ -398,8 +398,9 @@ The `getStatusID()` API is unreliable on some DFRobot_ID809 firmware versions. T
 
 ---
 
-## Roadmap
+## Future Roadmap
 
+- [ ] 🟠 Improve documentation images + Add hardware and 3D print enclosure info  
 - [ ] Multi-finger support (different fingers → different actions)
 - [ ] Windows/Linux HID sequences
 
