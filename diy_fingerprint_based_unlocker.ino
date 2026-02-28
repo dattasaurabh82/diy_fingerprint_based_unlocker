@@ -199,9 +199,8 @@ void bootSequence() {
     // 4. EEPROM init
     eepromInit();
     if (eepromHasRegistration()) {
-      Serial.print("[BOOT] EEPROM: valid registration (slot ");
-      Serial.print(eepromGetActiveSlot());
-      Serial.println(")");
+      uint8_t slot = eepromGetActiveSlot();
+      Serial.println("[BOOT] EEPROM: valid registration (slot " + String(slot) + ")");
     } else {
       Serial.println("[BOOT] EEPROM: no registration (virgin)");
     }
