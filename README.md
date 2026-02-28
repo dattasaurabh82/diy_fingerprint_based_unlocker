@@ -17,11 +17,15 @@
 <p align="center">
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#hardware">Hardware</a> &bull;
-  <a href="#wiring">Wiring</a> &bull;
   <a href="#getting-started">Getting Started</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="#security">Security</a> &bull;
+  <a href="USAGE.md">Usage Guide</a>
 </p>
+
+---
+
+> **Device built and flashed?** See the [Usage Guide](USAGE.md) for first use, daily operation, the Web Serial Monitor, LED reference, and troubleshooting during use.
 
 ---
 
@@ -122,14 +126,23 @@ The **RP2350-Zero** was chosen for its native USB HID support via the Pico SDK �
 
 > **Note**: After upload, the USB port may re-enumerate (CDC+HID composite device). Re-select the port in **Tools → Port** if Serial Monitor doesn't connect.
 
-### First Use
+---
 
-1. Flip switch to **REGISTER** (LOW position)
-2. Touch the sensor — follow the 3-capture enrollment
-3. Enter your Mac password in Serial Monitor (masked with `*`)
-4. Confirm password
-5. Flip switch to **RECOGNIZE**
-6. Touch sensor — watch your Mac lock and unlock
+## Configuration
+
+All tunables live in [`config.h`](config.h):
+
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `COLLECT_COUNT` | 3 | Fingerprint captures per enrollment |
+| `CAPTURE_TIMEOUT` | 10s | Per-capture timeout |
+| `MATCH_TIMEOUT` | 5s | Recognition capture timeout |
+| `PASSWORD_MAX_LEN` | 32 | Maximum password length |
+| `PASSWORD_TIMEOUT_MS` | 30000 | Password entry timeout (ms) |
+| `LOCK_DELAY_MS` | 2000 | Wait after Ctrl+Cmd+Q |
+| `WAKE_SETTLE_MS` | 2000 | Wait after wake keypress |
+| `COOLDOWN_MS` | 5000 | Ignore touches after unlock |
+| `DEBOUNCE_MS` | 50 | Switch debounce window |
 
 ---
 
@@ -171,6 +184,7 @@ diy_fingerprint_based_unlocker/
 │   └── app.js                           # Web Serial API + xterm.js logic
 ├── .github/workflows/
 │   └── deploy-pages.yml                 # GitHub Actions → GitHub Pages deployment
+├── USAGE.md                             # User guide (first use, web monitor, LED, troubleshooting)
 ├── PLAN.md                              # Full architecture document
 ├── CONTEXT.md                           # Compressed build knowledge
 └── tests/
@@ -242,31 +256,9 @@ The password is encrypted at rest using a device-bound key derived from the RP23
 
 ---
 
-## LED Guide
-
-The sensor's built-in RGB LED ring provides visual feedback for every state:
-
-| State | LED | Color |
-|-------|-----|-------|
-| Boot OK | Breathing | Blue |
-| Sensor failed | Solid | Red |
-| Register — waiting | Breathing | Yellow |
-| Capture success | Fast blink | Green |
-| Capture fail | Fast blink | Red |
-| Password input | Breathing | Cyan |
-| Registration done | Solid | Green |
-| Recognize — ready | Breathing | Blue |
-| Match found | Solid | Green |
-| No match | Fast blink | Red |
-| No registration | Solid | Red |
-| Cooldown | Slow blink | Green |
-| Corrupt state | Fast blink (5x) | Red |
-
----
-
 ## Serial Protocol
 
-All serial output uses structured `[TAG] message` format for future Web Serial UI integration:
+All serial output uses structured `[TAG] message` format, parsed by the [Web Serial Monitor](https://dattasaurabh82.github.io/diy_fingerprint_based_unlocker/):
 
 ```
 [BOOT]    Startup and validation messages
@@ -275,6 +267,7 @@ All serial output uses structured `[TAG] message` format for future Web Serial U
 [REG]     Registration flow
 [AUTH]    Recognition / authentication
 [HID]     HID keystroke actions
+[CMD]     Serial command acknowledgements (e.g. !RESET)
 [WARNING] Non-fatal issues
 [ERROR]   Fatal errors (halts device)
 ```
@@ -371,25 +364,9 @@ The password is encrypted at rest in EEPROM and only exists in plaintext RAM dur
 
 ---
 
-## Configuration
+## Troubleshooting (Setup & Build)
 
-All tunables live in [`config.h`](config.h):
-
-| Constant | Default | Description |
-|----------|---------|-------------|
-| `COLLECT_COUNT` | 3 | Fingerprint captures per enrollment |
-| `CAPTURE_TIMEOUT` | 10s | Per-capture timeout |
-| `MATCH_TIMEOUT` | 5s | Recognition capture timeout |
-| `PASSWORD_MAX_LEN` | 32 | Maximum password length |
-| `PASSWORD_TIMEOUT_MS` | 30000 | Password entry timeout (ms) |
-| `LOCK_DELAY_MS` | 2000 | Wait after Ctrl+Cmd+Q |
-| `WAKE_SETTLE_MS` | 2000 | Wait after wake keypress |
-| `COOLDOWN_MS` | 5000 | Ignore touches after unlock |
-| `DEBOUNCE_MS` | 50 | Switch debounce window |
-
----
-
-## Troubleshooting
+> For usage troubleshooting (day-to-day operation, Web Serial Monitor issues), see [USAGE.md → Troubleshooting](USAGE.md#troubleshooting).
 
 <details>
 <summary><strong>Serial Monitor shows nothing after upload</strong></summary>
@@ -416,13 +393,6 @@ The `Keyboard.print()` function uses US keyboard layout by default. If your Mac 
 <summary><strong>Boot says "corrupt" every time</strong></summary>
 
 The `getStatusID()` API is unreliable on some DFRobot_ID809 firmware versions. This project uses `getEnrolledIDList()` instead. If you're still seeing issues, ensure you have the latest version of this code and the DFRobot_ID809 library.
-
-</details>
-
-<details>
-<summary><strong>Device locks Mac but doesn't type password</strong></summary>
-
-The 2-second delays between lock→wake→type are tuned for macOS. If your Mac is slow to show the password field (e.g., external display, FileVault), increase `WAKE_SETTLE_MS` in `config.h`.
 
 </details>
 
