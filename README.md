@@ -67,9 +67,6 @@ The **RP2350-Zero** was chosen for its native USB HID support via the Pico SDK �
 
 ## Wiring
 
-> [!Warning]
-> **TBD**: Add images
-
 ```
   DFRobot SEN0348                          RP2350-Zero
   ───────────────────────────────────────────────────────
@@ -242,9 +239,6 @@ The password is encrypted at rest using a device-bound key derived from the RP23
 ## LED Guide
 
 The sensor's built-in RGB LED ring provides visual feedback for every state:
-
-> [!Warning]
-> **TBD**: Add gifs 
 
 | State | LED | Color |
 |-------|-----|-------|

@@ -31,6 +31,11 @@
       box-sizing: border-box;
     }
 
+    html, body {
+      height: 100%;
+      overflow: hidden;          /* page itself never scrolls */
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
@@ -149,6 +154,9 @@
 
     /* ── Terminal ── */
     #terminal-container {
+      flex: 1;
+      min-height: 0;             /* allow flex child to shrink below content */
+      overflow: auto;            /* let xterm viewport scroll internally */
       padding: 8px 8px 8px 24px;
       background: var(--bg);
     }
@@ -161,6 +169,7 @@
     #terminal-container .xterm-viewport {
       background-color: var(--bg) !important;
       width: 100% !important;
+      overflow-y: auto !important;
     }
 
     #terminal-container .xterm-viewport::-webkit-scrollbar {
@@ -283,7 +292,12 @@
     }
 
     /* ── Desktop-only content ── */
-    .desktop-content {}
+    .desktop-content {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
   </style>
 </head>
 
@@ -346,6 +360,8 @@
     let isReconnecting = false;
     let reconnectAttempts = 0;
     let stabilityTimer = null;
+    let passwordMode = false;   // true when firmware is prompting for password
+    let incomingLineBuf = '';    // accumulates incoming chars to detect prompts
 
     // ── DOM refs ──
     const btnConnect = document.getElementById('btn-connect');
@@ -376,17 +392,11 @@
     const TERM_PAD_LEFT = 24;  // matches #terminal-container padding-left
     const TERM_PAD_OTHER = 8;  // matches other padding
 
-    // Calculate initial size from window
+    // Calculate terminal size from actual container dimensions (set by flexbox)
     function calcTermSize() {
-      const header = document.querySelector('header');
-      const inputBar = document.querySelector('.input-bar');
-      const footer = document.querySelector('footer');
-      const fixedH = (header ? header.offsetHeight : 48)
-        + (inputBar ? inputBar.offsetHeight : 44)
-        + (footer ? footer.offsetHeight : 32)
-        + TERM_PAD_OTHER * 2;  // top + bottom padding
-      const availW = window.innerWidth - TERM_PAD_LEFT - TERM_PAD_OTHER;
-      const availH = window.innerHeight - fixedH;
+      const container = document.getElementById('terminal-container');
+      const availW = container.clientWidth - TERM_PAD_LEFT - TERM_PAD_OTHER;
+      const availH = container.clientHeight - TERM_PAD_OTHER * 2;
       return {
         cols: Math.max(40, Math.floor(availW / CELL_WIDTH)),
         rows: Math.max(10, Math.floor(availH / CELL_HEIGHT))
@@ -433,6 +443,12 @@
 
     const termContainer = document.getElementById('terminal-container');
     term.open(termContainer);
+
+    // After open, re-measure (container now has its flex height) and resize
+    requestAnimationFrame(() => {
+      const size = calcTermSize();
+      term.resize(size.cols, size.rows);
+    });
 
     // Resize terminal on window resize
     window.addEventListener('resize', () => {
@@ -545,7 +561,9 @@
               const { value, done } = await reader.read();
               if (done) break;
               if (value) {
-                term.write(decoder.decode(value));
+                const text = decoder.decode(value);
+                term.write(text);
+                checkForPasswordPrompt(text);
               }
             }
           } finally {
@@ -567,6 +585,8 @@
     async function disconnect() {
       isReconnecting = false;
       reconnectAttempts = 0;
+      setPasswordMode(false);
+      incomingLineBuf = '';
       if (stabilityTimer) { clearTimeout(stabilityTimer); stabilityTimer = null; }
       await closePort();
       port = null;
@@ -702,6 +722,39 @@
       serialSend(val + '\n');
       serialInput.value = '';
       serialInput.focus();
+    }
+
+    // ── Password prompt detection ──
+    // Watches incoming serial text for password prompt lines.
+    // Toggles input field between password (masked) and text (plain).
+    function checkForPasswordPrompt(text) {
+      // Accumulate into line buffer and check complete lines
+      for (const ch of text) {
+        if (ch === '\n' || ch === '\r') {
+          const line = incomingLineBuf.trim();
+          if (line.length > 0) {
+            if (line.includes('Enter password') || line.includes('Confirm password')) {
+              setPasswordMode(true);
+            } else if (passwordMode && (
+              line.includes('[REG]') || line.includes('[AUTH]') ||
+              line.includes('[BOOT]') || line.includes('[MODE]') ||
+              line.includes('[CMD]') || line.includes('[ERROR]')
+            )) {
+              // Any non-password tagged line ends password mode
+              setPasswordMode(false);
+            }
+          }
+          incomingLineBuf = '';
+        } else {
+          incomingLineBuf += ch;
+        }
+      }
+    }
+
+    function setPasswordMode(on) {
+      passwordMode = on;
+      serialInput.type = on ? 'password' : 'text';
+      serialInput.placeholder = on ? 'Type password (hidden)...' : 'Type a command and press Enter...';
     }
   </script>
 </body>
