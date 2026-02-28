@@ -206,9 +206,11 @@ void bootSequence() {
     // 5. HID keyboard init
     hidInit();
     Serial.println("[BOOT] HID Keyboard OK");
+    Serial.flush();
 
     // 6. Boot integrity validation
     bootState = runBootValidation(fingerprint);
+    Serial.flush();
 
     // Boot OK flash
     ledBootOK();
@@ -278,6 +280,7 @@ bool initSensor() {
 
   Serial.print("[BOOT] Enrolled fingerprints: ");
   Serial.println(fingerprint.getEnrollCount());
+  Serial.flush();
 
   return true;
 }
