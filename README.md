@@ -107,6 +107,7 @@ The **RP2350-Zero** was chosen for its native USB HID support via the Pico SDK �
 1. **Arduino IDE** → **Tools** → **Board Manager** → Search `rp2040` → Install **Raspberry Pi Pico/RP2040/RP2350** by Earle F. Philhower
 2. **Tools** → **Board** → `Waveshare RP2350 Zero`
 3. **Tools** → **USB Stack** → `Pico SDK (TinyUSB)`
+4. _All other SETTINGS stays at DEFAULT_
 
 ### Install the Sensor Library
 
@@ -164,6 +165,10 @@ diy_fingerprint_based_unlocker/
 ├── recognition.h                        # Fingerprint match → HID unlock sequence
 ├── hid_unlock.h                         # Mac-specific HID keystroke sequence
 ├── validation.h                         # Boot integrity check + orphan cleanup
+├── web/
+│   └── index.html                       # Web Serial Monitor (xterm.js + Web Serial API)
+├── .github/workflows/
+│   └── deploy-pages.yml                 # GitHub Actions → GitHub Pages deployment
 ├── PLAN.md                              # Full architecture document
 ├── CONTEXT.md                           # Compressed build knowledge
 └── tests/
