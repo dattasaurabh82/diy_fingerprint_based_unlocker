@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DIY RP2350 Fingerprint Unlock System — Monitor</title>
+
+  <!-- xterm.js v6.0.0 from CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/css/xterm.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/lib/xterm.min.js"></script>
+
+  <style>
+    :root {
+      /* Nord dark palette */
+      --bg: #2E3440;
+      --surface: #3B4252;
+      --border: #4C566A;
+      --text: #ECEFF4;
+      --text-muted: #D8DEE9;
+      --accent: #88C0D0;
+      --accent-hover: #81A1C1;
+      --danger: #BF616A;
+      --success: #A3BE8C;
+      --warning: #EBCB8B;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    header h1 span {
+      color: var(--accent);
+    }
+
+    .header-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    /* ── Status indicator ── */
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-right: 12px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      transition: background 0.3s;
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+    }
+
+    .status-dot.reconnecting {
+      background: var(--warning);
+      animation: pulse 0.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.3;
+      }
+    }
+
+    /* ── Buttons ── */
+    button {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    button:hover {
+      background: var(--border);
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    button.primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    button.danger:hover {
+      background: var(--danger);
+      color: var(--text);
+    }
+
+    /* ── Terminal ── */
+    #terminal-container {
+      padding: 8px 8px 8px 24px;
+      background: var(--bg);
+    }
+
+    #terminal-container .xterm {
+      padding: 0 !important;
+      width: 100% !important;
+    }
+
+    #terminal-container .xterm-viewport {
+      background-color: var(--bg) !important;
+      width: 100% !important;
+    }
+
+    #terminal-container .xterm-viewport::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    #terminal-container .xterm-viewport::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    #terminal-container .xterm-viewport::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    #terminal-container .xterm-screen {
+      width: 100% !important;
+    }
+
+    /* ── Input bar ── */
+    .input-bar {
+      display: flex;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .input-bar input {
+      flex: 1;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace;
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .input-bar input:focus {
+      border-color: var(--accent);
+    }
+
+    .input-bar input:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .input-bar input::placeholder {
+      color: var(--border);
+    }
+
+    .input-bar button {
+      padding: 8px 16px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 8px 20px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    /* ── Mobile warning ── */
+    .mobile-warning {
+      display: none;
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      flex: 1;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mobile-warning h2 {
+      font-size: 18px;
+      color: var(--text);
+    }
+
+    .mobile-warning p {
+      max-width: 360px;
+      line-height: 1.5;
+    }
+
+    /* ── Browser warning (no Web Serial) ── */
+    .browser-warning {
+      display: none;
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      flex: 1;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .browser-warning h2 {
+      font-size: 18px;
+      color: var(--danger);
+    }
+
+    .browser-warning p {
+      max-width: 400px;
+      line-height: 1.5;
+    }
+
+    /* ── Desktop-only content ── */
+    .desktop-content {}
+  </style>
+</head>
+
+<body>
+
+  <!-- Mobile warning -->
+  <div class="mobile-warning" id="mobile-warning">
+    <h2>Desktop Required</h2>
+    <p>Web Serial API is only available on desktop browsers (Chrome or Edge). Please open this page on a computer with
+      your device connected via USB.</p>
+  </div>
+
+  <!-- Browser warning (no Web Serial support) -->
+  <div class="browser-warning" id="browser-warning">
+    <h2>Browser Not Supported</h2>
+    <p>Your browser doesn't support the Web Serial API. Please use Chrome or Edge (version 89+) on desktop.</p>
+  </div>
+
+  <!-- Desktop content -->
+  <div class="desktop-content" id="desktop-content">
+    <header>
+      <h1><span>DIY RP2350 Fingerprint Unlock System</span> [Monitor]</h1>
+      <div class="header-controls">
+        <div class="status">
+          <div class="status-dot" id="status-dot"></div>
+          <span id="status-text">Disconnected</span>
+        </div>
+        <button id="btn-clear" title="Clear console">Clear</button>
+        <button id="btn-reset" class="danger" disabled title="Send !RESET to device">Reset</button>
+        <button id="btn-connect" class="primary">Connect</button>
+      </div>
+    </header>
+
+    <div id="terminal-container"></div>
+
+    <!-- Input bar -->
+    <div class="input-bar">
+      <input type="text" id="serial-input" placeholder="Not connected" disabled autocomplete="off" spellcheck="false">
+      <button id="btn-send" disabled>Send</button>
+    </div>
+
+    <footer>
+      Built by <a href="https://github.com/dattasaurabh82" target="_blank" rel="noopener">Saurabh Datta</a>
+    </footer>
+  </div>
+
+  <script>
+    // ── Config ──
+    const BAUD_RATE = 115200;
+    const USB_VID_RASPBERRY_PI = 0x2E8A;
+    const RECONNECT_INTERVAL_MS = 1500;
+    const RECONNECT_MAX_ATTEMPTS = 10;
+    const RECONNECT_STABLE_MS = 6000; // stay in reconnect-ready mode after connect (RP2350 USB re-enumerates twice: CDC then CDC+HID)
+
+    // ── State ──
+    let port = null;
+    let reader = null;
+    let writer = null;
+    let readLoopActive = false;
+    let isReconnecting = false;
+    let reconnectAttempts = 0;
+    let stabilityTimer = null;
+
+    // ── DOM refs ──
+    const btnConnect = document.getElementById('btn-connect');
+    const btnClear = document.getElementById('btn-clear');
+    const btnReset = document.getElementById('btn-reset');
+    const btnSend = document.getElementById('btn-send');
+    const serialInput = document.getElementById('serial-input');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+
+    // ── Mobile / browser detection ──
+    const isMobile = /Android|iPhone|iPad|iPod|webOS|Opera Mini/i.test(navigator.userAgent);
+    const hasWebSerial = 'serial' in navigator;
+
+    if (isMobile) {
+      document.getElementById('mobile-warning').style.display = 'flex';
+      document.getElementById('desktop-content').style.display = 'none';
+    } else if (!hasWebSerial) {
+      document.getElementById('browser-warning').style.display = 'flex';
+      document.getElementById('desktop-content').style.display = 'none';
+    }
+
+    // ── Terminal font metrics (must match Terminal options below) ──
+    const FONT_SIZE = 14;
+    const LINE_HEIGHT = 1.2;
+    const CELL_HEIGHT = Math.ceil(FONT_SIZE * LINE_HEIGHT);
+    const CELL_WIDTH = 8.4;  // approximate for 14px monospace
+    const TERM_PAD_LEFT = 24;  // matches #terminal-container padding-left
+    const TERM_PAD_OTHER = 8;  // matches other padding
+
+    // Calculate initial size from window
+    function calcTermSize() {
+      const header = document.querySelector('header');
+      const inputBar = document.querySelector('.input-bar');
+      const footer = document.querySelector('footer');
+      const fixedH = (header ? header.offsetHeight : 48)
+        + (inputBar ? inputBar.offsetHeight : 44)
+        + (footer ? footer.offsetHeight : 32)
+        + TERM_PAD_OTHER * 2;  // top + bottom padding
+      const availW = window.innerWidth - TERM_PAD_LEFT - TERM_PAD_OTHER;
+      const availH = window.innerHeight - fixedH;
+      return {
+        cols: Math.max(40, Math.floor(availW / CELL_WIDTH)),
+        rows: Math.max(10, Math.floor(availH / CELL_HEIGHT))
+      };
+    }
+
+    const initSize = calcTermSize();
+
+    // ── xterm.js setup (read-only terminal) ──
+    const term = new window.Terminal({
+      cols: initSize.cols,
+      rows: initSize.rows,
+      fontSize: FONT_SIZE,
+      lineHeight: LINE_HEIGHT,
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', monospace",
+      scrollback: 5000,
+      convertEol: true,
+      cursorBlink: false,
+      disableStdin: true,
+      theme: {
+        // Nord dark
+        background: '#2E3440',
+        foreground: '#D8DEE9',
+        cursor: '#88C0D0',
+        cursorAccent: '#2E3440',
+        black: '#3B4252',
+        red: '#BF616A',
+        green: '#A3BE8C',
+        yellow: '#EBCB8B',
+        blue: '#81A1C1',
+        magenta: '#B48EAD',
+        cyan: '#88C0D0',
+        white: '#E5E9F0',
+        brightBlack: '#4C566A',
+        brightRed: '#BF616A',
+        brightGreen: '#A3BE8C',
+        brightYellow: '#EBCB8B',
+        brightBlue: '#81A1C1',
+        brightMagenta: '#B48EAD',
+        brightCyan: '#8FBCBB',
+        brightWhite: '#ECEFF4',
+      }
+    });
+
+    const termContainer = document.getElementById('terminal-container');
+    term.open(termContainer);
+
+    // Resize terminal on window resize
+    window.addEventListener('resize', () => {
+      const size = calcTermSize();
+      term.resize(size.cols, size.rows);
+    });
+
+    // Welcome message
+    term.writeln('\x1b[36m── DIY RP2350 Fingerprint Unlock System [Monitor] ──\x1b[0m');
+    term.writeln('\x1b[90mClick "Connect" to open a serial connection.\x1b[0m');
+    term.writeln('');
+
+    // ── UI state helpers ──
+    function setConnected(connected) {
+      statusDot.classList.remove('connected', 'reconnecting');
+      if (connected) statusDot.classList.add('connected');
+      statusText.textContent = connected ? 'Connected' : 'Disconnected';
+      btnConnect.textContent = connected ? 'Disconnect' : 'Connect';
+      btnConnect.disabled = false;
+      btnReset.disabled = !connected;
+      btnSend.disabled = !connected;
+      serialInput.disabled = !connected;
+      serialInput.placeholder = connected ? 'Type a command and press Enter...' : 'Not connected';
+      if (connected) serialInput.focus();
+    }
+
+    function setReconnecting() {
+      statusDot.classList.remove('connected');
+      statusDot.classList.add('reconnecting');
+      statusText.textContent = 'Reconnecting...';
+      btnConnect.textContent = 'Cancel';
+      btnConnect.disabled = false;
+      btnReset.disabled = true;
+      btnSend.disabled = true;
+      serialInput.disabled = true;
+      serialInput.placeholder = 'Reconnecting to device...';
+    }
+
+    // ── Send text over serial ──
+    async function serialSend(text) {
+      if (writer) {
+        const encoder = new TextEncoder();
+        await writer.write(encoder.encode(text));
+      }
+    }
+
+    // ── Connect (initial — requires user gesture for port picker) ──
+    async function connect() {
+      try {
+        port = await navigator.serial.requestPort({
+          filters: [{ usbVendorId: USB_VID_RASPBERRY_PI }]
+        });
+        await openPort();
+      } catch (err) {
+        if (err.name !== 'NotFoundError') {
+          term.writeln(`\x1b[31mConnection error: ${err.message}\x1b[0m`);
+        }
+      }
+    }
+
+    // ── Open an already-granted port ──
+    async function openPort() {
+      try {
+        await port.open({ baudRate: BAUD_RATE });
+
+        const wasReconnecting = isReconnecting;
+        setConnected(true);
+        reconnectAttempts = 0;
+        term.writeln('\x1b[32m── Connected ──\x1b[0m');
+        term.writeln('');
+
+        // Set up writer
+        writer = port.writable.getWriter();
+
+        // Start read loop
+        readLoopActive = true;
+        readLoop();
+
+        // Listen for disconnect
+        port.addEventListener('disconnect', onPortDisconnect);
+
+        // After a reset-reconnect, the RP2350 may re-enumerate USB a second time
+        // (CDC init, then CDC+HID composite). Stay in reconnect-ready mode for a
+        // grace period so the second disconnect also auto-reconnects.
+        if (wasReconnecting) {
+          isReconnecting = true;  // keep the flag alive
+          if (stabilityTimer) clearTimeout(stabilityTimer);
+          stabilityTimer = setTimeout(() => {
+            isReconnecting = false;
+            stabilityTimer = null;
+          }, RECONNECT_STABLE_MS);
+        } else {
+          isReconnecting = false;
+        }
+
+      } catch (err) {
+        // Port not ready yet (e.g. during reconnect)
+        throw err;
+      }
+    }
+
+    // ── Read loop ──
+    async function readLoop() {
+      const decoder = new TextDecoder();
+      try {
+        while (port && port.readable && readLoopActive) {
+          reader = port.readable.getReader();
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              if (value) {
+                term.write(decoder.decode(value));
+              }
+            }
+          } finally {
+            reader.releaseLock();
+            reader = null;
+          }
+        }
+      } catch (err) {
+        if (readLoopActive) {
+          // Suppress error during reconnect — it's expected
+          if (!isReconnecting) {
+            term.writeln(`\x1b[31mRead error: ${err.message}\x1b[0m`);
+          }
+        }
+      }
+    }
+
+    // ── Disconnect (user-initiated) ──
+    async function disconnect() {
+      isReconnecting = false;
+      reconnectAttempts = 0;
+      if (stabilityTimer) { clearTimeout(stabilityTimer); stabilityTimer = null; }
+      await closePort();
+      port = null;
+      setConnected(false);
+      term.writeln('');
+      term.writeln('\x1b[33m── Disconnected ──\x1b[0m');
+    }
+
+    // ── Close port cleanly ──
+    async function closePort() {
+      readLoopActive = false;
+
+      if (reader) {
+        try { await reader.cancel(); } catch { }
+        reader = null;
+      }
+
+      if (writer) {
+        try { writer.releaseLock(); } catch { }
+        writer = null;
+      }
+
+      if (port) {
+        try { await port.close(); } catch { }
+      }
+    }
+
+    // ── Handle unexpected disconnect (USB unplug or reset reboot) ──
+    function onPortDisconnect() {
+      readLoopActive = false;
+      reader = null;
+      writer = null;
+
+      // If this was triggered by a reset, auto-reconnect
+      if (isReconnecting) {
+        // Port object is now stale — we need to get the new one
+        port = null;
+        term.writeln('\x1b[90m── Device rebooting, waiting for reconnect... ──\x1b[0m');
+        setReconnecting();
+        attemptReconnect();
+      } else {
+        port = null;
+        setConnected(false);
+        term.writeln('');
+        term.writeln('\x1b[33m── Device disconnected ──\x1b[0m');
+      }
+    }
+
+    // ── Auto-reconnect (after reset) ──
+    async function attemptReconnect() {
+      while (reconnectAttempts < RECONNECT_MAX_ATTEMPTS && isReconnecting) {
+        reconnectAttempts++;
+        await sleep(RECONNECT_INTERVAL_MS);
+
+        if (!isReconnecting) return; // cancelled
+
+        try {
+          // Get previously-granted ports (no picker needed)
+          const ports = await navigator.serial.getPorts();
+          const matchingPort = ports.find(p => {
+            const info = p.getInfo();
+            return info.usbVendorId === USB_VID_RASPBERRY_PI;
+          });
+
+          if (matchingPort) {
+            port = matchingPort;
+            await openPort();
+            return; // success
+          }
+        } catch (err) {
+          // Port not ready yet — keep trying
+        }
+      }
+
+      // Give up
+      if (isReconnecting) {
+        isReconnecting = false;
+        setConnected(false);
+        term.writeln('\x1b[31m── Reconnect failed — click Connect to try again ──\x1b[0m');
+      }
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // ── Button handlers ──
+    btnConnect.addEventListener('click', () => {
+      if (isReconnecting) {
+        // Cancel reconnect
+        isReconnecting = false;
+        reconnectAttempts = 0;
+        if (stabilityTimer) { clearTimeout(stabilityTimer); stabilityTimer = null; }
+        port = null;
+        setConnected(false);
+        term.writeln('\x1b[33m── Reconnect cancelled ──\x1b[0m');
+      } else if (port) {
+        disconnect();
+      } else {
+        connect();
+      }
+    });
+
+    btnClear.addEventListener('click', () => {
+      term.clear();
+    });
+
+    btnReset.addEventListener('click', async () => {
+      if (writer) {
+        // Flag that we expect a disconnect and should auto-reconnect
+        isReconnecting = true;
+        reconnectAttempts = 0;
+        await serialSend('!RESET\n');
+        term.writeln('');
+        term.writeln('\x1b[33m── Reset command sent ──\x1b[0m');
+      }
+    });
+
+    // ── Input bar: send on Enter or Send button ──
+    serialInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !serialInput.disabled) {
+        sendInputValue();
+      }
+    });
+
+    btnSend.addEventListener('click', () => {
+      sendInputValue();
+    });
+
+    function sendInputValue() {
+      const val = serialInput.value;
+      if (val.length === 0) return;
+      serialSend(val + '\n');
+      serialInput.value = '';
+      serialInput.focus();
+    }
+  </script>
+</body>
+
+</html>
