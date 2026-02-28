@@ -1,6 +1,6 @@
 // ============================================================
 // DIY Fingerprint-Based Unlocker
-// Milestone 5: Full build with boot validation + atomic safety
+// Milestone 6: IRQ detection + AES-256-CBC encrypted EEPROM
 // ============================================================
 
 #include <DFRobot_ID809.h>
@@ -9,6 +9,8 @@
 #include "switch_control.h"
 #include "led_feedback.h"
 #include "eeprom_storage.h"
+#include "crypto.h"
+#include "irq_finger.h"
 #include "registration.h"
 #include "hid_unlock.h"
 #include "recognition.h"
@@ -19,10 +21,6 @@ DFRobot_ID809 fingerprint;
 bool sensorOK = false;
 DeviceMode currentMode = MODE_RECOGNIZE;
 BootState bootState = BOOT_VIRGIN;
-
-// Finger detection state (edge-triggered)
-bool fingerPresent = false;
-bool fingerPrevious = false;
 
 // ─── Forward declarations ───
 void bootSequence();
@@ -54,7 +52,7 @@ void loop() {
     }
   }
 
-  delay(50);
+  delay(100);  // IRQ-driven — no need for fast polling
 }
 
 // ============================================================
@@ -69,9 +67,8 @@ void handleModeSwitch() {
     Serial.print("[SWITCH] ");
     Serial.println(modeName(currentMode));
 
-    // Reset finger state on mode change
-    fingerPresent = false;
-    fingerPrevious = false;
+    // Clear any pending IRQ trigger from before the switch
+    irqFingerClear();
 
     // Reset recognition state (cooldown, etc.)
     recReset();
@@ -94,13 +91,11 @@ void handleModeSwitch() {
 }
 
 // ============================================================
-// REGISTER MODE — wait for finger touch to start registration
+// REGISTER MODE — wait for IRQ touch to start registration
 // ============================================================
 void handleRegisterMode() {
-  fingerPresent = (fingerprint.detectFinger() == 1);
-
-  if (fingerPresent && !fingerPrevious) {
-    Serial.println("[SENSOR] Finger detected — starting registration");
+  if (irqFingerDetected()) {
+    Serial.println("[SENSOR] Finger detected (IRQ) — starting registration");
 
     // Run the full registration flow (blocks until complete or failed)
     bool success = runRegistration(fingerprint);
@@ -126,8 +121,7 @@ void handleRegisterMode() {
             ledNoRegistration();
           }
         }
-        fingerPrevious = false;
-        fingerPresent = false;
+        irqFingerClear();
         return;
       }
     }
@@ -135,24 +129,19 @@ void handleRegisterMode() {
     // Restore register idle LED
     ledRegisterIdle();
 
-    // Wait for finger removal before allowing another attempt
+    // Wait for finger removal before allowing another IRQ trigger
     while (fingerprint.detectFinger()) delay(100);
-    fingerPresent = false;
-    fingerPrevious = false;
+    irqFingerClear();  // discard any IRQ that fired during removal wait
     return;
   }
-
-  fingerPrevious = fingerPresent;
 }
 
 // ============================================================
-// RECOGNIZE MODE — detect + match + HID unlock
+// RECOGNIZE MODE — IRQ detect + match + HID unlock
 // ============================================================
 void handleRecognizeMode() {
-  fingerPresent = (fingerprint.detectFinger() == 1);
-
-  if (fingerPresent && !fingerPrevious) {
-    Serial.println("[SENSOR] Finger detected");
+  if (irqFingerDetected()) {
+    Serial.println("[SENSOR] Finger detected (IRQ)");
 
     // Run recognition (capture → match → HID unlock)
     bool unlocked = runRecognition(fingerprint);
@@ -165,10 +154,8 @@ void handleRecognizeMode() {
 
     // Wait for finger removal
     while (fingerprint.detectFinger()) delay(100);
-    fingerPresent = false;
+    irqFingerClear();  // discard any IRQ that fired during removal wait
   }
-
-  fingerPrevious = fingerPresent;
 }
 
 // ============================================================
@@ -200,15 +187,22 @@ void bootSequence() {
     // Init LED wrappers
     ledInit(&fingerprint);
 
-    // 4. EEPROM init
+    // 4. Crypto init (derive device-bound AES key from unique ID)
+    cryptoInit();
+
+    // 5. EEPROM init
     eepromInit();
 
-    // 5. HID keyboard init
+    // 6. HID keyboard init
     hidInit();
     Serial.println("[BOOT] HID Keyboard OK");
     Serial.flush();
 
-    // 6. Boot integrity validation
+    // 7. IRQ finger detection init
+    irqFingerInit();
+    Serial.flush();
+
+    // 8. Boot integrity validation
     bootState = runBootValidation(fingerprint);
     Serial.flush();
 
@@ -216,7 +210,7 @@ void bootSequence() {
     ledBootOK();
     delay(2000);
 
-    // 7. Decide initial mode based on validation result
+    // 9. Decide initial mode based on validation result
     switch (bootState) {
       case BOOT_VALID:
         // Normal operation — use switch position

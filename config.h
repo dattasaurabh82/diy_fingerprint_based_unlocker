@@ -10,7 +10,7 @@
 // ─── Pin Map ───
 #define PIN_SENSOR_TX    0   // UART0 TX → Sensor RX (Black wire)
 #define PIN_SENSOR_RX    1   // UART0 RX ← Sensor TX (Yellow wire)
-#define PIN_IRQ          2   // Sensor IRQ (reserved, unused v1)
+#define PIN_IRQ          2   // Sensor Touch Out (Blue wire) — IRQ-based detection
 #define PIN_MODE_SWITCH  3   // SPDT switch (other leg to GND)
 
 // ─── Switch ───
@@ -38,7 +38,7 @@
 #define EEPROM_ADDR_PWD_LEN     0x02
 #define EEPROM_ADDR_PWD_START   0x03
 #define EEPROM_ADDR_CHECKSUM    0x23  // 0x03 + 32
-#define EEPROM_MAGIC_VALUE      0xA5
+#define EEPROM_MAGIC_VALUE      0xAE  // 0xAE = encrypted format (was 0xA5 plaintext)
 
 // ─── HID Timing ───
 #define LOCK_DELAY_MS        2000

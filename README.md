@@ -78,7 +78,7 @@ The **RP2350-Zero** was chosen for its native USB HID support via the Pico SDK �
   Red    (GND)    ──→  GND pin
   Yellow (TX out) ──→  GPIO1 (UART0 RX on the board)
   Black  (RX in)  ──→  GPIO0 (UART0 TX on the board)
-  Blue   (IRQ)    ──→  GPIO2 (any free GPIO — optional for now)
+  Blue   (IRQ)    ──→  GPIO2 (interrupt-driven finger detection)
 
   SPDT Switch     ──→  GPIO3 (other leg to GND)
                        LOW = REGISTER
@@ -91,7 +91,7 @@ The **RP2350-Zero** was chosen for its native USB HID support via the Pico SDK �
 |------|----------|-------------|
 | `0` | UART0 TX → Sensor RX | Black |
 | `1` | UART0 RX ← Sensor TX | Yellow |
-| `2` | IRQ (optional, reserved) | Blue |
+| `2` | IRQ — finger touch interrupt | Blue |
 | `3` | SPDT Switch | — |
 | `3V3` | Sensor VCC + VIN | Green + White |
 | `GND` | Sensor GND + Switch | Red |
@@ -160,7 +160,10 @@ diy_fingerprint_based_unlocker/
 ├── config.h                             # Pin map, timing constants, EEPROM layout
 ├── switch_control.h                     # Debounced SPDT switch with change detection
 ├── led_feedback.h                       # Semantic LED ring wrappers
-├── eeprom_storage.h                     # EEPROM read/write/verify with XOR checksum
+├── irq_finger.h                         # IRQ-based finger detection (GPIO2 interrupt)
+├── tiny_aes.h                           # Self-contained AES-256-CBC implementation
+├── crypto.h                             # Device-bound key derivation + encrypt/decrypt
+├── eeprom_storage.h                     # Encrypted EEPROM read/write/verify
 ├── registration.h                       # Two-slot safe fingerprint + password enrollment
 ├── recognition.h                        # Fingerprint match → HID unlock sequence
 ├── hid_unlock.h                         # Mac-specific HID keystroke sequence
@@ -214,16 +217,16 @@ flowchart TD
 ```
 Address  Size   Contents
 ──────────────────────────────────────
-0x00     1      Magic byte (0xA5 = valid)
+0x00     1      Magic byte (0xAE = encrypted format)
 0x01     1      Active slot ID (1 or 2)
-0x02     1      Password length (1–32)
-0x03     32     Password (null-padded)
+0x02     1      Password length (1–32, plaintext)
+0x03     32     Password (AES-256-CBC encrypted)
 0x23     1      XOR checksum (bytes 0x00–0x22)
 ──────────────────────────────────────
 Total: 36 bytes of 4096 available
 ```
 
-Magic byte + XOR checksum = double validation that EEPROM contents are intentional, not garbage from virgin flash.
+The password is encrypted at rest using a device-bound key derived from the RP2350's unique hardware ID. The checksum validates the encrypted data's integrity before decryption is attempted.
 
 ### Boot Validation Matrix
 
@@ -336,7 +339,7 @@ All serial output uses structured `[TAG] message` format for future Web Serial U
 
 ### Threat Model
 
-This device is a **convenience tool**, not a high-security system. The password is stored in plaintext in EEPROM — anyone with physical access to the MCU can extract it. The fingerprint templates live on the sensor's internal flash and are not exportable.
+This device is a **convenience tool** with defense-in-depth. The password is encrypted at rest using AES-256-CBC with a key unique to each physical board. The fingerprint templates live on the sensor's internal flash and are not exportable.
 
 ### What's Protected
 
@@ -357,14 +360,14 @@ This device is a **convenience tool**, not a high-security system. The password 
 
 | Threat | Status |
 |--------|--------|
-| Physical access to MCU flash | Password readable via SWD/JTAG |
+| Physical access to MCU + unique ID extraction | Theoretically recoverable with advanced tooling |
 | USB sniffing | HID keystrokes are unencrypted USB |
 | Shoulder surfing Serial Monitor | Password masked with `*`, but raw bytes in transit |
 | Sensor spoofing | Capacitive sensor has basic anti-spoof, but no liveness detection |
 
 ### Password Handling
 
-The password only exists in RAM during two moments: registration (input + confirm) and recognition (EEPROM read → `Keyboard.print()`). In both cases, the buffer is zeroed with `memset()` immediately after use.
+The password is encrypted at rest in EEPROM and only exists in plaintext RAM during two brief moments: registration (input + confirm + encrypt) and recognition (decrypt → `Keyboard.print()`). In both cases, all buffers — including intermediates and crypto contexts — are zeroed with `memset()` immediately after use.
 
 ---
 
@@ -427,8 +430,8 @@ The 2-second delays between lock→wake→type are tuned for macOS. If your Mac 
 
 ## Roadmap
 
-- [ ] IRQ-based finger detection (replace polling with GPIO2 interrupt)
-- [ ] Encrypted EEPROM storage (AES-256 with key derived from sensor data)
+- [x] IRQ-based finger detection (GPIO2 interrupt replaces polling)
+- [x] Encrypted EEPROM storage (AES-256-CBC with device-bound key)
 - [ ] Web Serial UI for registration (replace Serial Monitor with a browser-based interface)
 - [ ] Multi-finger support (different fingers → different actions)
 - [ ] Windows/Linux HID sequences
