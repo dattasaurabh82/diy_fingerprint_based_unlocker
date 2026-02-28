@@ -1,6 +1,6 @@
 // ============================================================
 // DIY Fingerprint-Based Unlocker
-// Milestone 4: Boot + Switch + Sensor + Registration + Recognition + HID
+// Milestone 5: Full build with boot validation + atomic safety
 // ============================================================
 
 #include <DFRobot_ID809.h>
@@ -12,11 +12,13 @@
 #include "registration.h"
 #include "hid_unlock.h"
 #include "recognition.h"
+#include "validation.h"
 
 // ─── Globals ───
 DFRobot_ID809 fingerprint;
 bool sensorOK = false;
 DeviceMode currentMode = MODE_RECOGNIZE;
+BootState bootState = BOOT_VIRGIN;
 
 // Finger detection state (edge-triggered)
 bool fingerPresent = false;
@@ -105,6 +107,8 @@ void handleRegisterMode() {
 
     if (success) {
       Serial.println("[REG] Success — flip switch to RECOGNIZE to use");
+      // Update boot state now that we have a valid registration
+      bootState = BOOT_VALID;
     } else {
       Serial.println("[REG] Registration did not complete");
       // Check if switch changed during registration
@@ -198,35 +202,49 @@ void bootSequence() {
 
     // 4. EEPROM init
     eepromInit();
-    if (eepromHasRegistration()) {
-      uint8_t slot = eepromGetActiveSlot();
-      Serial.println("[BOOT] EEPROM: valid registration (slot " + String(slot) + ")");
-    } else {
-      Serial.println("[BOOT] EEPROM: no registration (virgin)");
-    }
 
     // 5. HID keyboard init
     hidInit();
     Serial.println("[BOOT] HID Keyboard OK");
 
-    // Boot OK flash, then set mode LED
+    // 6. Boot integrity validation
+    bootState = runBootValidation(fingerprint);
+
+    // Boot OK flash
     ledBootOK();
-    Serial.println("[BOOT] LED: breathing blue (boot OK)");
     delay(2000);
 
-    // Set LED to current mode
-    if (currentMode == MODE_REGISTER) {
-      ledRegisterIdle();
-      Serial.println("[MODE] REGISTER");
-    } else {
-      // Check registration when booting into recognize mode
-      if (recCheckRegistration(fingerprint)) {
-        ledRecognizeReady();
-        Serial.println("[MODE] RECOGNIZE");
-      } else {
-        ledNoRegistration();
-        Serial.println("[MODE] RECOGNIZE (no registration — flip to REGISTER)");
-      }
+    // 7. Decide initial mode based on validation result
+    switch (bootState) {
+      case BOOT_VALID:
+        // Normal operation — use switch position
+        if (currentMode == MODE_REGISTER) {
+          ledRegisterIdle();
+          Serial.println("[MODE] REGISTER");
+        } else {
+          if (recCheckRegistration(fingerprint)) {
+            ledRecognizeReady();
+            Serial.println("[MODE] RECOGNIZE");
+          } else {
+            // Shouldn't happen if BOOT_VALID, but be safe
+            ledNoRegistration();
+            Serial.println("[MODE] RECOGNIZE (registration check failed)");
+          }
+        }
+        break;
+
+      case BOOT_VIRGIN:
+      case BOOT_CORRUPT:
+        // Force REGISTER mode regardless of switch
+        currentMode = MODE_REGISTER;
+        ledRegisterIdle();
+        if (bootState == BOOT_VIRGIN) {
+          Serial.println("[MODE] REGISTER (forced — virgin device)");
+        } else {
+          Serial.println("[MODE] REGISTER (forced — state was corrupt, cleaned up)");
+        }
+        Serial.println("[BOOT] Touch sensor to begin registration");
+        break;
     }
   }
 
