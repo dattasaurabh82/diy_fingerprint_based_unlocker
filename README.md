@@ -424,9 +424,6 @@ The 2-second delays between lock→wake→type are tuned for macOS. If your Mac 
 
 ## Roadmap
 
-- [x] IRQ-based finger detection (GPIO2 interrupt replaces polling)
-- [x] Encrypted EEPROM storage (AES-256-CBC with device-bound key)
-- [ ] Web Serial UI for registration (replace Serial Monitor with a browser-based interface)
 - [ ] Multi-finger support (different fingers → different actions)
 - [ ] Windows/Linux HID sequences
 
