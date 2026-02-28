@@ -562,11 +562,19 @@ hasValidRegistration() → bool:
 
 ---
 
-## FILE STRUCTURE
+## FILE STRUCTURE — Modular
 
 ```
 diy_fingerprint_based_unlocker/
-├── diy_fingerprint_based_unlocker.ino   ← main sketch (grows per milestone)
+├── diy_fingerprint_based_unlocker.ino   ← main: setup(), loop(), state machine
+├── config.h                             ← all #defines, pin map, timing constants
+├── switch_control.h / .cpp              ← debounce, readSwitch(), checkAbort()
+├── eeprom_storage.h / .cpp              ← EEPROM read/write/verify/clear helpers
+├── led_feedback.h / .cpp                ← LED state wrappers (setLED_Ready, etc.)
+├── registration.h / .cpp                ← full registration flow (M3)
+├── recognition.h / .cpp                 ← match + HID unlock flow (M4)
+├── hid_unlock.h / .cpp                  ← HID keyboard sequence (M4)
+├── validation.h / .cpp                  ← boot integrity check (M5)
 ├── tests/
 │   ├── 1_queryDeviceBPS/
 │   ├── 2_queryDeviceFullInfo/
@@ -575,9 +583,12 @@ diy_fingerprint_based_unlocker/
 │   ├── 5_fingerPrintEnrollment/
 │   ├── 6_fingerPrintSearchMatch/
 │   ├── 7_hidTest/
-│   └── 8_hidModifierTest/          ← NEW: test modifier combos
+│   └── 8_hidModifierTest/              ← NEW: test modifier combos
+├── PLAN.md
+├── CONTEXT.md                           ← compressed knowledge after milestones
 ├── README.md
 └── assets/
 ```
 
-Single-file sketch (no .h/.cpp split for v1). All code in the .ino with clear section comments.
+Modules introduced per milestone, not all at once.
+Each .h/.cpp pair owns one responsibility. Main .ino stays thin — just wiring.
