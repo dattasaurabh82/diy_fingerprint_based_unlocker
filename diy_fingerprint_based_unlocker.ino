@@ -1,6 +1,6 @@
 // ============================================================
 // DIY Fingerprint-Based Unlocker
-// Milestone 3: Boot + Switch + Sensor + Registration Flow
+// Milestone 4: Boot + Switch + Sensor + Registration + Recognition + HID
 // ============================================================
 
 #include <DFRobot_ID809.h>
@@ -10,13 +10,15 @@
 #include "led_feedback.h"
 #include "eeprom_storage.h"
 #include "registration.h"
+#include "hid_unlock.h"
+#include "recognition.h"
 
 // ─── Globals ───
 DFRobot_ID809 fingerprint;
 bool sensorOK = false;
 DeviceMode currentMode = MODE_RECOGNIZE;
 
-// Finger detection state (RECOGNIZE mode only in M3)
+// Finger detection state (edge-triggered)
 bool fingerPresent = false;
 bool fingerPrevious = false;
 
@@ -69,12 +71,21 @@ void handleModeSwitch() {
     fingerPresent = false;
     fingerPrevious = false;
 
+    // Reset recognition state (cooldown, etc.)
+    recReset();
+
     // Update LED to reflect new mode
     if (sensorOK) {
       if (currentMode == MODE_REGISTER) {
         ledRegisterIdle();
       } else {
-        ledRecognizeReady();
+        // Check registration when entering recognize mode
+        if (recCheckRegistration(fingerprint)) {
+          ledRecognizeReady();
+        } else {
+          ledNoRegistration();
+          Serial.println("[AUTH] No registration — flip to REGISTER first");
+        }
       }
     }
   }
@@ -104,7 +115,12 @@ void handleRegisterMode() {
         Serial.print("[SWITCH] ");
         Serial.println(modeName(currentMode));
         if (currentMode == MODE_RECOGNIZE) {
-          ledRecognizeReady();
+          recReset();
+          if (recCheckRegistration(fingerprint)) {
+            ledRecognizeReady();
+          } else {
+            ledNoRegistration();
+          }
         }
         fingerPrevious = false;
         fingerPresent = false;
@@ -126,41 +142,22 @@ void handleRegisterMode() {
 }
 
 // ============================================================
-// RECOGNIZE MODE — detect + match (placeholder HID in M4)
+// RECOGNIZE MODE — detect + match + HID unlock
 // ============================================================
 void handleRecognizeMode() {
   fingerPresent = (fingerprint.detectFinger() == 1);
 
   if (fingerPresent && !fingerPrevious) {
     Serial.println("[SENSOR] Finger detected");
-    ledMatchFound();
 
-    uint8_t ret = fingerprint.collectionFingerprint(MATCH_TIMEOUT);
-    if (ret != ERR_ID809) {
-      uint8_t matchID = fingerprint.search();
-      if (matchID != 0 && matchID != ERR_ID809) {
-        Serial.print("[AUTH] Match! ID #");
-        Serial.println(matchID);
+    // Run recognition (capture → match → HID unlock)
+    bool unlocked = runRecognition(fingerprint);
 
-        // Read password to confirm EEPROM is paired
-        if (eepromHasRegistration()) {
-          Serial.println("[AUTH] Registration valid — HID unlock (M4)");
-        } else {
-          Serial.println("[AUTH] No password in EEPROM — flip to REGISTER");
-        }
-
-        ledMatchFound();
-      } else {
-        Serial.println("[AUTH] No match");
-        ledNoMatch();
-      }
-    } else {
-      Serial.println("[AUTH] Capture failed");
-      ledNoMatch();
+    if (unlocked) {
+      // After cooldown LED phase, return to ready
+      ledRecognizeReady();
     }
-
-    delay(1500);
-    ledRecognizeReady();
+    // If not unlocked (no match, capture fail, etc.), LED already reset in runRecognition
 
     // Wait for finger removal
     while (fingerprint.detectFinger()) delay(100);
@@ -209,6 +206,10 @@ void bootSequence() {
       Serial.println("[BOOT] EEPROM: no registration (virgin)");
     }
 
+    // 5. HID keyboard init
+    hidInit();
+    Serial.println("[BOOT] HID Keyboard OK");
+
     // Boot OK flash, then set mode LED
     ledBootOK();
     Serial.println("[BOOT] LED: breathing blue (boot OK)");
@@ -219,8 +220,14 @@ void bootSequence() {
       ledRegisterIdle();
       Serial.println("[MODE] REGISTER");
     } else {
-      ledRecognizeReady();
-      Serial.println("[MODE] RECOGNIZE");
+      // Check registration when booting into recognize mode
+      if (recCheckRegistration(fingerprint)) {
+        ledRecognizeReady();
+        Serial.println("[MODE] RECOGNIZE");
+      } else {
+        ledNoRegistration();
+        Serial.println("[MODE] RECOGNIZE (no registration — flip to REGISTER)");
+      }
     }
   }
 
