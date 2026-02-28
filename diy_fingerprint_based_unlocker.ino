@@ -115,12 +115,10 @@ bool initSensor() {
   Serial.print("[BOOT] Sensor init... ");
   Serial.flush();
 
-  int result = fingerprint.begin(Serial1);
+  bool ok = fingerprint.begin(Serial1);
 
-  if (result != 0) {
-    Serial.print("FAILED (code: ");
-    Serial.print(result);
-    Serial.println(")");
+  if (!ok) {
+    Serial.println("FAILED");
     Serial.println("[ERROR] Sensor init failed — halting");
 
     // Can't use ledInit() since sensor failed, so drive LED directly

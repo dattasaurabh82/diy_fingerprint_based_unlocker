@@ -562,19 +562,19 @@ hasValidRegistration() → bool:
 
 ---
 
-## FILE STRUCTURE — Modular
+## FILE STRUCTURE — Header-Only Modules
 
 ```
 diy_fingerprint_based_unlocker/
 ├── diy_fingerprint_based_unlocker.ino   ← main: setup(), loop(), state machine
 ├── config.h                             ← all #defines, pin map, timing constants
-├── switch_control.h / .cpp              ← debounce, readSwitch(), checkAbort()
-├── eeprom_storage.h / .cpp              ← EEPROM read/write/verify/clear helpers
-├── led_feedback.h / .cpp                ← LED state wrappers (setLED_Ready, etc.)
-├── registration.h / .cpp                ← full registration flow (M3)
-├── recognition.h / .cpp                 ← match + HID unlock flow (M4)
-├── hid_unlock.h / .cpp                  ← HID keyboard sequence (M4)
-├── validation.h / .cpp                  ← boot integrity check (M5)
+├── switch_control.h                     ← debounce, readSwitch(), checkAbort()
+├── eeprom_storage.h                     ← EEPROM read/write/verify/clear helpers
+├── led_feedback.h                       ← LED semantic state wrappers
+├── registration.h                       ← full registration flow (M3)
+├── recognition.h                        ← match + HID unlock flow (M4)
+├── hid_unlock.h                         ← HID keyboard sequence (M4)
+├── validation.h                         ← boot integrity check (M5)
 ├── tests/
 │   ├── 1_queryDeviceBPS/
 │   ├── 2_queryDeviceFullInfo/

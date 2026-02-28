@@ -1,38 +1,47 @@
 // ============================================================
-// led_feedback.h — LED ring state wrappers
+// led_feedback.h — LED ring semantic state wrappers
+// Header-only module (implementation inline)
 // ============================================================
 #ifndef LED_FEEDBACK_H
 #define LED_FEEDBACK_H
 
 #include <DFRobot_ID809.h>
 
-// Must be called once after fingerprint.begin() succeeds.
-// Stores a pointer to the fingerprint object for LED control.
-void ledInit(DFRobot_ID809* fp);
+// ─── State ───
+static DFRobot_ID809* _led_fp = nullptr;
 
-// ─── Semantic LED states ───
-// Each maps to a specific mode/color/count combination.
+// ─── Init ───
+// Call once after fingerprint.begin() succeeds.
+inline void ledInit(DFRobot_ID809* fp) { _led_fp = fp; }
 
-void ledBootOK();           // Breathing Blue ×3  — boot succeeded
-void ledSensorFail();       // Solid Red           — sensor init failed (stays on)
+// ─── Internal helper (uses library enum types, not uint8_t) ───
+static inline void _ledCtrl(DFRobot_ID809::eLEDMode_t mode, DFRobot_ID809::eLEDColor_t color, uint8_t count) {
+  if (_led_fp) _led_fp->ctrlLED(mode, color, count);
+}
 
-void ledRegisterIdle();     // Breathing Yellow    — REGISTER mode, waiting
-void ledWaitingFinger();    // Breathing Yellow    — waiting for finger placement
-void ledCaptureOK();        // Fast Blink Green ×3 — finger captured successfully
-void ledCaptureFail();      // Fast Blink Red ×3   — capture failed
-void ledWaitingPassword();  // Breathing Cyan      — waiting for serial password input
-void ledRegisterSuccess();  // Solid Green         — registration completed
-void ledRegisterFail();     // Fast Blink Red ×3   — registration failed
+// ─── Boot ───
+inline void ledBootOK()          { _ledCtrl(DFRobot_ID809::eBreathing,  DFRobot_ID809::eLEDBlue,   3); }
+inline void ledSensorFail()      { _ledCtrl(DFRobot_ID809::eKeepsOn,    DFRobot_ID809::eLEDRed,    0); }
 
-void ledRecognizeReady();   // Breathing Blue      — RECOGNIZE mode, ready
-void ledMatchFound();       // Solid Green         — fingerprint matched
-void ledNoMatch();          // Fast Blink Red ×3   — no match
-void ledNoRegistration();   // Solid Red           — no registration exists
-void ledCooldown();         // Slow Blink Green    — cooldown active
+// ─── Register mode ───
+inline void ledRegisterIdle()    { _ledCtrl(DFRobot_ID809::eBreathing,  DFRobot_ID809::eLEDYellow, 0); }
+inline void ledWaitingFinger()   { _ledCtrl(DFRobot_ID809::eBreathing,  DFRobot_ID809::eLEDYellow, 0); }
+inline void ledCaptureOK()       { _ledCtrl(DFRobot_ID809::eFastBlink,  DFRobot_ID809::eLEDGreen,  3); }
+inline void ledCaptureFail()     { _ledCtrl(DFRobot_ID809::eFastBlink,  DFRobot_ID809::eLEDRed,    3); }
+inline void ledWaitingPassword() { _ledCtrl(DFRobot_ID809::eBreathing,  DFRobot_ID809::eLEDCyan,   0); }
+inline void ledRegisterSuccess() { _ledCtrl(DFRobot_ID809::eKeepsOn,    DFRobot_ID809::eLEDGreen,  0); }
+inline void ledRegisterFail()    { _ledCtrl(DFRobot_ID809::eFastBlink,  DFRobot_ID809::eLEDRed,    3); }
 
-void ledSwitchAbort();      // Fast Blink Purple ×3 — switch changed, aborting
-void ledCorruptState();     // Fast Blink Red ×5   — corrupt state detected
+// ─── Recognize mode ───
+inline void ledRecognizeReady()  { _ledCtrl(DFRobot_ID809::eBreathing,  DFRobot_ID809::eLEDBlue,   0); }
+inline void ledMatchFound()      { _ledCtrl(DFRobot_ID809::eKeepsOn,    DFRobot_ID809::eLEDGreen,  0); }
+inline void ledNoMatch()         { _ledCtrl(DFRobot_ID809::eFastBlink,  DFRobot_ID809::eLEDRed,    3); }
+inline void ledNoRegistration()  { _ledCtrl(DFRobot_ID809::eKeepsOn,    DFRobot_ID809::eLEDRed,    0); }
+inline void ledCooldown()        { _ledCtrl(DFRobot_ID809::eSlowBlink,  DFRobot_ID809::eLEDGreen,  0); }
 
-void ledOff();              // LED off
+// ─── System ───
+inline void ledSwitchAbort()     { _ledCtrl(DFRobot_ID809::eFastBlink,  DFRobot_ID809::eLEDCyan,   3); }
+inline void ledCorruptState()    { _ledCtrl(DFRobot_ID809::eFastBlink,  DFRobot_ID809::eLEDRed,    5); }
+inline void ledOff()             { _ledCtrl(DFRobot_ID809::eNormalClose, DFRobot_ID809::eLEDBlue,   0); }
 
 #endif // LED_FEEDBACK_H
