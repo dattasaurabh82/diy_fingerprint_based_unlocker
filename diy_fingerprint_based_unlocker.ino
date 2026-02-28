@@ -1,6 +1,6 @@
 // ============================================================
 // DIY Fingerprint-Based Unlocker
-// Milestone 1: Boot + Switch (debounced) + Sensor Init + LED
+// Milestone 2: Boot + Switch + Sensor + Finger Detection
 // ============================================================
 
 #include <DFRobot_ID809.h>
@@ -14,9 +14,15 @@ DFRobot_ID809 fingerprint;
 bool sensorOK = false;
 DeviceMode currentMode = MODE_RECOGNIZE;
 
+// Finger detection state — avoid spamming serial
+bool fingerPresent = false;
+bool fingerPrevious = false;
+
 // ─── Forward declarations ───
 void bootSequence();
 bool initSensor();
+void handleModeSwitch();
+void pollFinger();
 
 // ============================================================
 // SETUP
@@ -29,15 +35,32 @@ void setup() {
 // LOOP
 // ============================================================
 void loop() {
-  // Read debounced switch
-  DeviceMode mode = switchRead();
+  // 1. Check for mode switch change
+  handleModeSwitch();
 
-  // Detect mode change
+  // 2. Poll finger detection (mode-aware)
+  if (sensorOK) {
+    pollFinger();
+  }
+
+  delay(50);
+}
+
+// ============================================================
+// MODE SWITCH HANDLER
+// ============================================================
+void handleModeSwitch() {
+  switchRead();
+
   if (switchChanged()) {
     switchAckChange();
-    currentMode = mode;
+    currentMode = switchRead();
     Serial.print("[SWITCH] ");
     Serial.println(modeName(currentMode));
+
+    // Reset finger state on mode change
+    fingerPresent = false;
+    fingerPrevious = false;
 
     // Update LED to reflect new mode
     if (sensorOK) {
@@ -48,10 +71,61 @@ void loop() {
       }
     }
   }
+}
 
-  // Milestone 1: just idle here.
-  // Future milestones add finger detection, registration, recognition.
-  delay(50);
+// ============================================================
+// FINGER DETECTION (edge-triggered serial, mode-aware LED)
+// ============================================================
+void pollFinger() {
+  fingerPresent = (fingerprint.detectFinger() == 1);
+
+  // Only print on transitions (edge-triggered, not level)
+  if (fingerPresent && !fingerPrevious) {
+    // Finger just placed
+    Serial.println("[SENSOR] Finger detected");
+
+    if (currentMode == MODE_REGISTER) {
+      // In register mode: green flash acknowledges touch
+      // (full enrollment flow comes in M3)
+      ledCaptureOK();
+      Serial.println("[SENSOR] (REGISTER mode — enrollment not yet implemented)");
+    } else {
+      // In recognize mode: attempt capture + search
+      // (full recognition flow comes in M4)
+      ledMatchFound();
+
+      uint8_t ret = fingerprint.collectionFingerprint(MATCH_TIMEOUT);
+      if (ret != ERR_ID809) {
+        uint8_t matchID = fingerprint.search();
+        if (matchID != 0 && matchID != ERR_ID809) {
+          Serial.print("[SENSOR] Match! ID #");
+          Serial.println(matchID);
+          ledMatchFound();
+        } else {
+          Serial.println("[SENSOR] No match");
+          ledNoMatch();
+        }
+      } else {
+        Serial.println("[SENSOR] Capture failed");
+        ledNoMatch();
+      }
+
+      delay(1500);  // brief pause to show result LED
+
+      // Restore mode LED
+      ledRecognizeReady();
+    }
+  } else if (!fingerPresent && fingerPrevious) {
+    // Finger just lifted
+    Serial.println("[SENSOR] Finger removed");
+
+    // Restore mode LED after register touch
+    if (currentMode == MODE_REGISTER) {
+      ledRegisterIdle();
+    }
+  }
+
+  fingerPrevious = fingerPresent;
 }
 
 // ============================================================
@@ -122,12 +196,11 @@ bool initSensor() {
     Serial.println("[ERROR] Sensor init failed — halting");
 
     // Can't use ledInit() since sensor failed, so drive LED directly
-    // (may or may not work depending on failure mode)
     fingerprint.ctrlLED(fingerprint.eKeepsOn, fingerprint.eLEDRed, 0);
 
     // Halt — no point continuing without sensor
     while (true) { delay(1000); }
-    return false;  // never reached
+    return false;
   }
 
   Serial.println("OK");
