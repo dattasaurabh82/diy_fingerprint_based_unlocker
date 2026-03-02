@@ -1,6 +1,5 @@
 // ============================================================
 // hid_unlock.h — Mac HID unlock sequence
-// Header-only module
 //
 // Proven sequence (Test 8):
 //   1. Ctrl+Cmd+Q  (lock screen — safe if already locked)

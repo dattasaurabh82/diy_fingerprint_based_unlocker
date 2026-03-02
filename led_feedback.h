@@ -1,6 +1,5 @@
 // ============================================================
 // led_feedback.h — LED ring semantic state wrappers
-// Header-only module (implementation inline)
 // ============================================================
 #ifndef LED_FEEDBACK_H
 #define LED_FEEDBACK_H

@@ -1,6 +1,5 @@
 // ============================================================
 // eeprom_storage.h — Encrypted EEPROM storage for password + slot
-// Header-only module
 //
 // Layout (36 bytes):
 //   0x00: Magic (0xAE = encrypted format)

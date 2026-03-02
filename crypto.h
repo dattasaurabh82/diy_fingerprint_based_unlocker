@@ -1,6 +1,5 @@
 // ============================================================
 // crypto.h — Device-bound AES-256-CBC encryption for EEPROM
-// Header-only module
 //
 // Key derivation:
 //   1. Read RP2350's 8-byte unique board ID from OTP

@@ -1,6 +1,5 @@
 // ============================================================
 // registration.h — Two-slot safe fingerprint + password registration
-// Header-only module
 //
 // Key principle: never destroy old registration until new one is
 // fully committed and verified. Old pair stays intact on any failure.

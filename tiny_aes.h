@@ -1,6 +1,6 @@
 // ============================================================
 // tiny_aes.h — Minimal AES-256-CBC implementation
-// Header-only, self-contained, no external dependencies
+// self-contained, no external dependencies
 //
 // Based on FIPS 197 (AES specification).
 // Provides ONLY what we need: AES-256-CBC encrypt/decrypt

@@ -1,8 +1,3 @@
-// ============================================================
-// DIY Fingerprint-Based Unlocker
-// Milestone 7: Serial commands + encrypted EEPROM + IRQ
-// ============================================================
-
 #include <DFRobot_ID809.h>
 #include <hardware/watchdog.h>
 

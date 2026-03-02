@@ -1,6 +1,5 @@
 // ============================================================
 // recognition.h — Fingerprint match + HID unlock flow
-// Header-only module
 //
 // Flow:
 //   1. Finger detected → capture → search

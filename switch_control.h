@@ -1,6 +1,5 @@
 // ============================================================
 // switch_control.h — SPDT switch with software debounce
-// Header-only module (implementation inline)
 // ============================================================
 #ifndef SWITCH_CONTROL_H
 #define SWITCH_CONTROL_H

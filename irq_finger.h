@@ -1,6 +1,5 @@
 // ============================================================
 // irq_finger.h — IRQ-based finger detection via SEN0348 Touch Out
-// Header-only module
 //
 // The SEN0348's blue IRQ wire (Touch Out) goes HIGH when a finger
 // touches the sensor. This replaces the polling approach

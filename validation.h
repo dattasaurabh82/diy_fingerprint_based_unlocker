@@ -1,6 +1,5 @@
 // ============================================================
 // validation.h — Boot integrity check + orphan cleanup
-// Header-only module
 //
 // Decision matrix (from PLAN.md):
 //   EEPROM valid + activeSlot fingerprint exists   → VALID (clean orphans)
