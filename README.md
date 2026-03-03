@@ -96,6 +96,16 @@ The **RP2350-Zero** was chosen for its native USB HID support via the Pico SDK â
 | `3V3` | Sensor VCC + VIN | Green + White |
 | `GND` | Sensor GND + Switch | Red |
 
+![alt text](<assets/Untitled Sketch_bb.png>)
+
+---
+
+## 3D printed Case Design (Optional)
+
+[![alt text](<assets/Screenshot 2026-03-03 at 23.28.30.png>)](3D)
+
+_click on the image above_
+
 ---
 
 ## Getting Started
